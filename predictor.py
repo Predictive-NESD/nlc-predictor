@@ -25,26 +25,16 @@ def parse_arguments():
 
 # read file & load model
 def read_excel_file(file_name):
-    file_path = '../input/{}.xlsx'.format(file_name)
+    file_path = 'input/{}.xlsx'.format(file_name)
     return pd.read_excel(file_path)
 
 def read_csv_file(file_name):
-   file_path = '../input/{}.csv'.format(file_name)
+   file_path = 'input/{}.csv'.format(file_name)
    return pd.read_csv(file_path)
 
-# def read_case(file_name, case_name):
-#   case_df = pd.read_excel(
-#     io='../input/{}.xlsx'.format(file_name),
-#     sheet_name=case_name,
-#     usecols='A:AQ',
-#     nrows=28
-#   )
-#   case_df['Country Name'] = case_df['Country Name'].fillna('Thailand')
-#   case_df.rename(columns={'Changes in inventory index': 'Changes in inventories (current US$)'}, inplace=True)
-#   return case_df
 def read_case(file_name):
     case_df = pd.read_excel(
-       io=file_name,
+       io= 'input/{}'.format(file_name),
        sheet_name=0,  # Read the first sheet/tab
        usecols='A:AQ',
        nrows=28
@@ -55,7 +45,7 @@ def read_case(file_name):
 
 def load_model(model_name):
   return keras.models.load_model(
-    '../model/{}.keras'.format(model_name))
+    'model/{}.keras'.format(model_name),)
 
 # calculate
 def calculate_index(df, column_names):
@@ -116,13 +106,13 @@ def calculate_all_transformed(case_df):
   return new_case_df
 
 # predict & save
-def predict_and_display(best_model, normalized_features, index_name, output_file, case_name):
+def predict_and_display(best_model, normalized_features, index_name, output_file_name, case_name):
     ann_predictions = best_model.predict(normalized_features)
     print(f"==========Prediction {index_name} Index ==========")
     for pred in ann_predictions:
         print("{}".format(pred[0]))
 
-    excel_file_path = output_file
+    excel_file_path = 'output/{}'.format(output_file_name)
 
     # Check if the excel file already exists
     if os.path.exists(excel_file_path):
@@ -245,7 +235,7 @@ def main():
   case_base = "Test Lag Data 2024"
 
   # shap path
-  shap_path = "../output/shap"
+  shap_path = "output/shap"
 
   # input_abc.xlxs
   input_file = args.input_file
@@ -254,7 +244,8 @@ def main():
   # case_1 = ''
 
   # output_xyz.xlxs
-  output_file = f'../output/{args.output_file}'
+  output_file = args.output_file
+  output_file_name = os.path.splitext(args.output_file)[0]
 
   # Models
   model_name_tc = "tc_index_kt_b2.2_2024_02_02_20_08_42_190891"
@@ -342,7 +333,7 @@ def main():
   df_case_input[features_tc]
   normalized_df_case_input_tc = scaler_tc.transform(df_case_input[features_tc])
   normalized_df_case_input_tc.shape
-  predict_and_display(best_model_tc, normalized_df_case_input_tc, 'TC', output_file, input_file_name)
+  predict_and_display(best_model_tc, normalized_df_case_input_tc, 'TC', output_file_name, input_file_name)
   calculate_shap_and_display(best_model_tc, normalized_df_case_input_tc, features_tc, df_case_input, 'TC', input_file_name, shap_path)
 
   # WIC
@@ -353,7 +344,7 @@ def main():
   # Case Input + WIC Index
   normalized_df_case_input_wic = scaler_wic.transform(df_case_input[features_wic])
   normalized_df_case_input_wic.shape
-  predict_and_display(best_model_wic, normalized_df_case_input_wic, 'WIC', output_file, input_file_name)
+  predict_and_display(best_model_wic, normalized_df_case_input_wic, 'WIC', output_file_name, input_file_name)
   calculate_shap_and_display(best_model_wic, normalized_df_case_input_wic, features_wic, df_case_input, 'WIC', input_file_name, shap_path)
 
 
@@ -365,7 +356,7 @@ def main():
   # Case Input + AC Index
   normalized_df_case_input_ac = scaler_ac.transform(df_case_input[features_ac])
   normalized_df_case_input_ac.shape
-  predict_and_display(best_model_ac, normalized_df_case_input_ac, 'AC', output_file, input_file_name)
+  predict_and_display(best_model_ac, normalized_df_case_input_ac, 'AC', output_file_name, input_file_name)
   calculate_shap_and_display(best_model_ac, normalized_df_case_input_ac, features_ac, df_case_input, 'AC', input_file_name, shap_path)
 
 
