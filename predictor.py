@@ -13,8 +13,9 @@ import io
 from openpyxl import load_workbook, Workbook
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.python.keras.models import load_model
 from sklearn import preprocessing
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 
 # Functions
 def parse_arguments():
@@ -44,8 +45,9 @@ def read_case(file_name):
     return case_df
 
 def load_model(model_name):
-  return keras.models.load_model(
-    'model/{}.keras'.format(model_name),)
+  return tf.keras.models.load_model(
+    'model/{}.keras'.format(model_name),
+    )
 
 # calculate
 def calculate_index(df, column_names):
@@ -226,7 +228,6 @@ def calculate_shap_and_display(best_model, normalized_features, feature_names, d
 
     wb.save(excel_file_path)
     print(f"SHAP values saved to {excel_file_path}")
-
 
 def main():
   args = parse_arguments()
