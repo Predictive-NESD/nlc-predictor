@@ -17,6 +17,8 @@ from tensorflow.python.keras.models import load_model
 from sklearn import preprocessing
 # from sklearn.model_selection import train_test_split
 
+# input รับอะไรมาก็ได้ output ก็ตามที่ตั้งไว้ แต่ถ้าใช้ชื่อเิมก็ให้ sav overwrite ทับไปเลย
+
 # Functions
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Run the prediction model on input Excel file and save the output.')
@@ -27,18 +29,26 @@ def parse_arguments():
 # read file & load model
 def read_excel_file(file_name):
     file_path = 'input/{}.xlsx'.format(file_name)
-    return pd.read_excel(file_path)
+    return pd.ExcelFile(file_path)
 
 def read_csv_file(file_name):
    file_path = 'input/{}.csv'.format(file_name)
    return pd.read_csv(file_path)
 
 def read_case(file_name):
+    excel_file = read_excel_file(file_name)
+    sheet_names = excel_file.sheet_names
+    last_sheet_name = sheet_names[-1]
+    
+    case_df_full = pd.read_excel(
+        io=excel_file,
+        sheet_name=last_sheet_name,
+    )
+    nrows = len(case_df_full['Year'])
     case_df = pd.read_excel(
-       io= 'input/{}'.format(file_name),
-       sheet_name=0,  # Read the first sheet/tab
-       usecols='A:AQ',
-       nrows=28
+        io=excel_file,
+        sheet_name=last_sheet_name,
+        nrows=nrows
     )
     case_df['Country Name'] = case_df['Country Name'].fillna('Thailand')
     case_df.rename(columns={'Changes in inventory index': 'Changes in inventories (current US$)'}, inplace=True)
@@ -107,14 +117,19 @@ def calculate_all_transformed(case_df):
                                                           'Air transport, freight (million ton-km) Index'])
   return new_case_df
 
-# predict & save
+# predict & save in output folder
 def predict_and_display(best_model, normalized_features, index_name, output_file_name, case_name):
     ann_predictions = best_model.predict(normalized_features)
     print(f"==========Prediction {index_name} Index ==========")
     for pred in ann_predictions:
         print("{}".format(pred[0]))
 
-    excel_file_path = 'output/{}'.format(output_file_name)
+    # Check if the output folder already exist. If it doesn't exist, create the output folder
+    output_folder_path = 'output'
+    output_excel_file = '{}.xlsx'.format(output_file_name)
+    os.makedirs(output_folder_path, exist_ok=True)
+
+    excel_file_path = os.path.join(output_folder_path, output_excel_file)
 
     # Check if the excel file already exists
     if os.path.exists(excel_file_path):
@@ -150,20 +165,20 @@ def create_new_folder(base_path, folder_name):
     return new_folder_path
 
 ### save SHAP plots and SHAP values
-def save_force_plot(force_plot, year, index_name, df_name, folder_path):
+def save_force_plot(force_plot, year, index_name, output_file_name, folder_path):
     shap.initjs()
-    file_path = os.path.join(folder_path, f"force_plot_{year}_{index_name}_{df_name}.html")
+    file_path = os.path.join(folder_path, f"force_plot_{year}_{index_name}_{output_file_name}.html")
     shap.save_html(file_path, force_plot)
     print(f"Force plot saved for year {year} {index_name} Index at: {file_path}")
 
-def calculate_shap_and_display(best_model, normalized_features, feature_names, df, index_name, df_name, base_path):
+def calculate_shap_and_display(best_model, normalized_features, feature_names, df, index_name, output_file_name, shap_path):
     # Create a new parent folder for SHAP results
-    parent_folder_name = f"shap_{df_name}"
-    parent_folder_path = create_new_folder(base_path, parent_folder_name)
+    shap_folder_name = f"shap_{output_file_name}"
+    shap_folder_path = create_new_folder(shap_path, shap_folder_name)
 
     # Create subfolders for SHAP plots and SHAP values
-    shap_plots_folder = create_new_folder(parent_folder_path, "shap_plots")
-    shap_values_folder = create_new_folder(parent_folder_path, "shap_values")
+    shap_plots_folder = create_new_folder(shap_folder_path, "shap_plots")
+    shap_values_folder = create_new_folder(shap_folder_path, "shap_values")
 
     explainer = shap.KernelExplainer(best_model, normalized_features, feature_names=feature_names)
     shap_values = explainer.shap_values(normalized_features)
@@ -184,7 +199,7 @@ def calculate_shap_and_display(best_model, normalized_features, feature_names, d
             print("Year:", year)
             force_plot = shap.force_plot(base_value, shap_values[0][rec_ind], normalized_features[rec_ind], feature_names=feature_names, show=False)
             display(force_plot)
-            save_force_plot(force_plot, year, index_name, df_name, shap_plots_folder)
+            save_force_plot(force_plot, year, index_name, output_file_name, shap_plots_folder)
 
             if year not in shap_dfs:
                 shap_dfs[year] = pd.DataFrame(columns=['Feature'] + [f'{year}'])
@@ -204,8 +219,8 @@ def calculate_shap_and_display(best_model, normalized_features, feature_names, d
       pd.options.display.float_format = '{:.10f}'.format
       print(shap_df)
       
-    excel_file_path = os.path.join(shap_values_folder, f'shap_values_{index_name}_{df_name}.xlsx')
-
+    excel_file_path = os.path.join(shap_values_folder, f'shap_values_{output_file_name}.xlsx')
+    # Load workbook if it exists, else create new workbook
     if os.path.exists(excel_file_path):
         wb = load_workbook(excel_file_path)
         if 'Sheet' in wb.sheetnames:
@@ -213,8 +228,14 @@ def calculate_shap_and_display(best_model, normalized_features, feature_names, d
     else:
         wb = Workbook()
 
-    ws = wb[df_name] if df_name in wb.sheetnames else wb.create_sheet(df_name)
+    ws_name = f"{output_file_name}_{index_name}"
+    # Delete sheet if it already exists
+    if ws_name in wb.sheetnames:
+        del wb[ws_name]
 
+    ws = wb[ws_name] if ws_name in wb.sheetnames else wb.create_sheet(ws_name)
+    if 'Sheet' in wb.sheetnames:
+       del wb['Sheet']
     # Write header row with index name and years
     ws.append([f'Feature - {index_name} Index'] + [year for year in shap_dfs.keys()])
 
@@ -322,43 +343,43 @@ def main():
   df_base = calculate_all(df_base)
 
   # Input Data
-  df_case_input = read_case(input_file)
+  df_case_input = read_case(input_file_name)
   df_case_input = calculate_all(df_case_input)
 
   # TC
   df_base[features_tc]
   scaler_tc = data_scaler.fit(df_base[features_tc])
-  # print(scaler_tc)
+  print(scaler_tc)
 
   # Case Input + TC Index
   df_case_input[features_tc]
   normalized_df_case_input_tc = scaler_tc.transform(df_case_input[features_tc])
   normalized_df_case_input_tc.shape
   predict_and_display(best_model_tc, normalized_df_case_input_tc, 'TC', output_file_name, input_file_name)
-  calculate_shap_and_display(best_model_tc, normalized_df_case_input_tc, features_tc, df_case_input, 'TC', input_file_name, shap_path)
+  calculate_shap_and_display(best_model_tc, normalized_df_case_input_tc, features_tc, df_case_input, 'TC', output_file_name, shap_path)
 
   # WIC
   df_base[features_wic]
   scaler_wic = data_scaler.fit(df_base[features_wic])
-  # print(scaler_wic)
+  print(scaler_wic)
 
   # Case Input + WIC Index
   normalized_df_case_input_wic = scaler_wic.transform(df_case_input[features_wic])
   normalized_df_case_input_wic.shape
   predict_and_display(best_model_wic, normalized_df_case_input_wic, 'WIC', output_file_name, input_file_name)
-  calculate_shap_and_display(best_model_wic, normalized_df_case_input_wic, features_wic, df_case_input, 'WIC', input_file_name, shap_path)
+  calculate_shap_and_display(best_model_wic, normalized_df_case_input_wic, features_wic, df_case_input, 'WIC', output_file_name, shap_path)
 
 
   # AC
   df_base[features_ac]
   scaler_ac = data_scaler.fit(df_base[features_ac])
-  # print(scaler_ac)
+  print(scaler_ac)
 
   # Case Input + AC Index
   normalized_df_case_input_ac = scaler_ac.transform(df_case_input[features_ac])
   normalized_df_case_input_ac.shape
   predict_and_display(best_model_ac, normalized_df_case_input_ac, 'AC', output_file_name, input_file_name)
-  calculate_shap_and_display(best_model_ac, normalized_df_case_input_ac, features_ac, df_case_input, 'AC', input_file_name, shap_path)
+  calculate_shap_and_display(best_model_ac, normalized_df_case_input_ac, features_ac, df_case_input, 'AC', output_file_name, shap_path)
 
 
 if __name__ == "__main__":
