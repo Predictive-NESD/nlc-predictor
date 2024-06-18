@@ -1,9 +1,9 @@
 # python==3.10
 tensorflow==2.14
 shap==0.43
-pandas
-numpy
-ipython
-matplotlib
-openpyxl
-scikit-learn
+pandas==2.2
+numpy==1.26
+ipython==8.25
+matplotlib==3.9
+openpyxl==3.1
+scikit-learn==1.5
